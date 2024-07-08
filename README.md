@@ -58,6 +58,24 @@ docker pull vulfocus/vulfocus:latest
 
 这完全是一个 `软件定义网络`，而且 `Virtualbox` 在 `NAT` 模式下，除了进行传统的 `NAT` 服务外，还有一个 _便捷功能_ ——将直接访问 `网关 10.0.2.15` 的流量转发到 `宿主机` 的 `localhost回环网卡` 中。
 
+## 启动 vulfocus 容器
+
+安装 `jq` 使得 `start.sh` 脚本能够解析 `json` 文件
+
+```bash
+sudo apt update && sudo apt install jq
+```
+
+由于 `docker compose` 已经默认集成到了 `docker` 中，这里对 [start.sh](https://github.com/c4pr1c3/ctf-games/blob/master/fofapro/vulfocus/start.sh) 脚本第 47 行更新为 `docker compose`：
+
+![](.assets_img/README/docker_compose_change.png)
+
+![](.assets_img/README/start_vulfocus.png)
+
+成功访问 `web` 页面
+
+![](.assets_img/README/vulfocus_web.png)
+
 ## 参考
 
 - [Configure the daemon to use a proxy](https://docs.docker.com/config/daemon/proxy/)
