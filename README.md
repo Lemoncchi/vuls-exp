@@ -221,13 +221,38 @@ print(response.text)
 
 不由地猜测此镜像作者预留这行代码的初衷，而且还是使用的 `&&` 而不是 `;` 进行连接——可能是为了在 `dnslog.cn` 统计此镜像的使用情况——但是还有一种情况是——这会暴露此用户的 `公网 IP 地址`——如果此容器：
 
-1. 运行在一个有 `公网 IP` 的服务器上（没有经过 `NAT` 及防火墙），那么此用户的 `公网 IP` 就会被 `dnslog.cn` 记录下来
+1. 运行在一个有 `公网 IP` 的服务器上（没有经过 `NAT` 及防火墙），那么此用户的 `公网 IP` 就会被 `dnslog.cn` 记录下来。且在容器运行过程中，其 `ping` 操作一直都会进行
 2. 容器端口被映射到了公网的网卡上
 3. 容器 [vulshare/nginx-php-flag](https://hub.docker.com/r/vulshare/nginx-php-flag/tags) 的漏洞利用非常简单，而且可以拿到容器的 `root` 权限
 
 攻击者可以据此确定该 `IP` 中正在运行 `靶场容器`——从而对此脆弱容器发起攻击——那么原本的 `靶场容器` 就成 `真肉鸡` 了！
 
 但是即使在 `vulfocus` 这样一个即使是 **开源** 的 `漏洞集成平台`，**官方** 提供的镜像中竟然也存在着这样一个不大不小的可以称为为 “后门” 的命令——让人感慨！
+
+### 修复 `vulshare/nginx-php-flag` 镜像
+
+故下面在 `vulshare/nginx-php-flag` 镜像的基础上，`docker build` 一波：
+
+```Dockerfile
+FROM vulshare/nginx-php-flag
+RUN echo "#!/bin/bash\n\
+/etc/init.d/nginx start && /etc/init.d/php7.2-fpm start\n\
+while true; do sleep 1000; done" > /2.sh
+```
+
+![](.assets_img/README/docker_build.png)
+
+导入我们新构建的 `nginx-php-flag` 镜像：
+
+![](.assets_img/README/import_new_image.png)
+
+再更新 `DMZ` 靶场：
+
+![](.assets_img/README/new_dmz_topology.png)
+
+`DMZ` 靶场容器启动成功：
+
+![](.assets_img/README/docker_dmz_ps.png)
 
 ## Debug
 
