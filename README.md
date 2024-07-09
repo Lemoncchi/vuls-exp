@@ -169,6 +169,66 @@ print(response.text)
 
 [![asciicast](https://asciinema.org/a/667333.svg)](https://asciinema.org/a/667333)
 
+## 漏洞攻防
+
+### DMZ 场景
+
+直接导入 [DMZ.zip](https://github.com/c4pr1c3/ctf-games/tree/master/fofapro/vulfocus) 到 `vulfocus` 会显示文件上传失败：
+
+![](.assets_img/README/upload_DMZ_error.png)
+
+但是查看 `vulfocus` 日志，可以看到 `POST` 返回状态码为 200：
+
+![](.assets_img/README/vulfocus_post.png)
+
+猜测是由于场景中的 `容器镜像版本更新` 或者 `vulfocus` 本身没有注重版本兼容性导致的问题
+
+于是干脆自己照着图手搓了示例中的攻防场景：
+
+![](.assets_img/README/dmz_map.png)
+
+导出 [DMZ_topology.zip](./DMZ_topology.zip) 当前（2024 年 7 月）可用
+
+### 启动 DMZ 靶场
+
+无法直接启动 `DMZ` 靶场，前端页面显示 `服务器内部错误`：
+
+![](.assets_img/README/vulfocus_internal_error.png)
+
+查看 vulfocus 日志发现 `容器启动失败`：
+
+![](.assets_img/README/container_error.png)
+
+使用 `docker container ls -a` 检查容器状态，发现 `vulshare/nginx-php-flag` 容器启动后错误退出：
+
+![](.assets_img/README/nginx_container_error.png)
+
+查看 `nginx` 容器日志：
+
+![](.assets_img/README/nginx_logs.png)
+
+顺藤摸瓜检查 `docker layer`：
+
+![](.assets_img/README/check_nginx_history.png)
+
+怀疑由于启动命令 `2.sh` 导致的错误，查看 `2.sh` 脚本：
+
+![](.assets_img/README/ping_dnslog_cn.png)
+
+最后竟然发现是 `dnslog.cn` `无法进行域名解析` 导致的错误
+
+至于为什么 `dnslog.cn` 无法进行域名解析，黄老师在上课前恰好已经做了十足的讲解了（但是没有想象到在这个容器中出现）。
+
+不由地猜测此镜像作者预留这行代码的初衷，而且还是使用的 `&&` 而不是 `;` 进行连接——可能是为了在 `dnslog.cn` 统计此镜像的使用情况——但是还有一种情况是——这会暴露此用户的 `公网 IP 地址`——如果此容器：
+
+1. 运行在一个有 `公网 IP` 的服务器上（没有经过 `NAT` 及防火墙），那么此用户的 `公网 IP` 就会被 `dnslog.cn` 记录下来
+2. 容器端口被映射到了公网的网卡上
+3. 容器 [vulshare/nginx-php-flag](https://hub.docker.com/r/vulshare/nginx-php-flag/tags) 的漏洞利用非常简单，而且可以拿到容器的 `root` 权限
+
+攻击者可以据此确定该 `IP` 中正在运行 `靶场容器`——从而对此脆弱容器发起攻击——那么原本的 `靶场容器` 就成 `真肉鸡` 了！
+
+但是即使在 `vulfocus` 这样一个即使是 **开源** 的 `漏洞集成平台`，**官方** 提供的镜像中竟然也存在着这样一个不大不小的可以称为为 “后门” 的命令——让人感慨！
+
 ## Debug
 
 在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
