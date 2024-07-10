@@ -1,0 +1,136 @@
+table ip nat {
+	chain DOCKER {
+		iifname "br-f712ac9db10d" counter packets 0 bytes 0 return
+		iifname "br-43f9bc7de653" counter packets 2 bytes 144 return
+		iifname "br-920ceafaa5eb" counter packets 0 bytes 0 return
+		iifname "br-9fbcece24ed7" counter packets 0 bytes 0 return
+		iifname "br-30826b011882" counter packets 0 bytes 0 return
+		iifname "docker0" counter packets 0 bytes 0 return
+		iifname != "br-30826b011882" meta l4proto tcp tcp dport 80 counter packets 137 bytes 8220 dnat to 172.18.0.2:80
+		iifname != "br-43f9bc7de653" meta l4proto tcp tcp dport 24141 counter packets 32 bytes 1920 dnat to 192.169.84.5:8080
+	}
+
+	chain POSTROUTING {
+		type nat hook postrouting priority srcnat; policy accept;
+		oifname != "br-f712ac9db10d" ip saddr 192.169.86.0/24 counter packets 0 bytes 0 masquerade 
+		oifname != "br-43f9bc7de653" ip saddr 192.169.84.0/24 counter packets 52 bytes 9642 masquerade 
+		oifname != "br-920ceafaa5eb" ip saddr 192.169.85.0/24 counter packets 0 bytes 0 masquerade 
+		oifname != "br-9fbcece24ed7" ip saddr 172.19.0.0/16 counter packets 84 bytes 5040 masquerade 
+		oifname != "br-30826b011882" ip saddr 172.18.0.0/16 counter packets 151 bytes 9060 masquerade 
+		oifname != "docker0" ip saddr 172.17.0.0/16 counter packets 72 bytes 4480 masquerade 
+		meta l4proto tcp ip saddr 172.18.0.2 ip daddr 172.18.0.2 tcp dport 80 counter packets 0 bytes 0 masquerade 
+		meta l4proto tcp ip saddr 192.169.84.5 ip daddr 192.169.84.5 tcp dport 8080 counter packets 0 bytes 0 masquerade 
+	}
+
+	chain PREROUTING {
+		type nat hook prerouting priority dstnat; policy accept;
+		fib daddr type local counter packets 406 bytes 25024 jump DOCKER
+	}
+
+	chain OUTPUT {
+		type nat hook output priority -100; policy accept;
+		ip daddr != 127.0.0.0/8 fib daddr type local counter packets 0 bytes 0 jump DOCKER
+	}
+}
+table ip filter {
+	chain DOCKER {
+		iifname != "br-30826b011882" oifname "br-30826b011882" meta l4proto tcp ip daddr 172.18.0.2 tcp dport 80 counter packets 137 bytes 8220 accept
+		iifname != "br-43f9bc7de653" oifname "br-43f9bc7de653" meta l4proto tcp ip daddr 192.169.84.5 tcp dport 8080 counter packets 32 bytes 1920 accept
+	}
+
+	chain DOCKER-ISOLATION-STAGE-1 {
+		iifname "br-f712ac9db10d" oifname != "br-f712ac9db10d" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-43f9bc7de653" oifname != "br-43f9bc7de653" counter packets 6307 bytes 640848 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-920ceafaa5eb" oifname != "br-920ceafaa5eb" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-9fbcece24ed7" oifname != "br-9fbcece24ed7" counter packets 642 bytes 49895 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-30826b011882" oifname != "br-30826b011882" counter packets 11001 bytes 41513485 jump DOCKER-ISOLATION-STAGE-2
+		iifname "docker0" oifname != "docker0" counter packets 589 bytes 56857 jump DOCKER-ISOLATION-STAGE-2
+		counter packets 45393 bytes 243361039 return
+	}
+
+	chain DOCKER-ISOLATION-STAGE-2 {
+		oifname "br-f712ac9db10d" counter packets 0 bytes 0 drop
+		oifname "br-43f9bc7de653" counter packets 0 bytes 0 drop
+		oifname "br-920ceafaa5eb" counter packets 0 bytes 0 drop
+		oifname "br-9fbcece24ed7" counter packets 0 bytes 0 drop
+		oifname "br-30826b011882" counter packets 0 bytes 0 drop
+		oifname "docker0" counter packets 0 bytes 0 drop
+		counter packets 18539 bytes 42261085 return
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy drop;
+		counter packets 23482 bytes 102982752 jump DOCKER-USER
+		counter packets 23454 bytes 102945481 jump DOCKER-ISOLATION-STAGE-1
+		oifname "br-f712ac9db10d" ct state related,established counter packets 69 bytes 5453 accept
+		oifname "br-f712ac9db10d" counter packets 9 bytes 540 jump DOCKER
+		iifname "br-f712ac9db10d" oifname != "br-f712ac9db10d" counter packets 0 bytes 0 accept
+		iifname "br-f712ac9db10d" oifname "br-f712ac9db10d" counter packets 9 bytes 540 accept
+		oifname "br-43f9bc7de653" ct state related,established counter packets 2675 bytes 7417876 accept
+		oifname "br-43f9bc7de653" counter packets 113 bytes 6900 jump DOCKER
+		iifname "br-43f9bc7de653" oifname != "br-43f9bc7de653" counter packets 6307 bytes 640848 accept
+		iifname "br-43f9bc7de653" oifname "br-43f9bc7de653" counter packets 19 bytes 1260 accept
+		oifname "br-920ceafaa5eb" ct state related,established counter packets 0 bytes 0 accept
+		oifname "br-920ceafaa5eb" counter packets 0 bytes 0 jump DOCKER
+		iifname "br-920ceafaa5eb" oifname != "br-920ceafaa5eb" counter packets 0 bytes 0 accept
+		iifname "br-920ceafaa5eb" oifname "br-920ceafaa5eb" counter packets 0 bytes 0 accept
+		oifname "br-9fbcece24ed7" ct state related,established counter packets 511 bytes 99753 accept
+		oifname "br-9fbcece24ed7" counter packets 22 bytes 1320 jump DOCKER
+		iifname "br-9fbcece24ed7" oifname != "br-9fbcece24ed7" counter packets 642 bytes 49895 accept
+		iifname "br-9fbcece24ed7" oifname "br-9fbcece24ed7" counter packets 0 bytes 0 accept
+		oifname "br-30826b011882" ct state related,established counter packets 22753 bytes 193475645 accept
+		oifname "br-30826b011882" counter packets 137 bytes 8220 jump DOCKER
+		iifname "br-30826b011882" oifname != "br-30826b011882" counter packets 11001 bytes 41513485 accept
+		iifname "br-30826b011882" oifname "br-30826b011882" counter packets 0 bytes 0 accept
+		oifname "docker0" ct state related,established counter packets 517 bytes 81367 accept
+		oifname "docker0" counter packets 48 bytes 2880 jump DOCKER
+		iifname "docker0" oifname != "docker0" counter packets 589 bytes 56857 accept
+		iifname "docker0" oifname "docker0" counter packets 0 bytes 0 accept
+	}
+
+	chain DOCKER-USER {
+		meta l4proto tcp # STRING match  "execute.exec" ALGO name bm TO 65535 counter packets 14 bytes 18018 drop
+		counter packets 45393 bytes 243361039 return
+	}
+
+	chain INPUT {
+		type filter hook input priority filter; policy accept;
+	}
+}
+table ip6 nat {
+	chain DOCKER {
+	}
+}
+table ip6 filter {
+	chain DOCKER {
+	}
+
+	chain DOCKER-ISOLATION-STAGE-1 {
+		iifname "br-f712ac9db10d" oifname != "br-f712ac9db10d" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-43f9bc7de653" oifname != "br-43f9bc7de653" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-920ceafaa5eb" oifname != "br-920ceafaa5eb" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-9fbcece24ed7" oifname != "br-9fbcece24ed7" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		iifname "br-30826b011882" oifname != "br-30826b011882" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		iifname "docker0" oifname != "docker0" counter packets 0 bytes 0 jump DOCKER-ISOLATION-STAGE-2
+		counter packets 0 bytes 0 return
+	}
+
+	chain DOCKER-ISOLATION-STAGE-2 {
+		oifname "br-f712ac9db10d" counter packets 0 bytes 0 drop
+		oifname "br-43f9bc7de653" counter packets 0 bytes 0 drop
+		oifname "br-920ceafaa5eb" counter packets 0 bytes 0 drop
+		oifname "br-9fbcece24ed7" counter packets 0 bytes 0 drop
+		oifname "br-30826b011882" counter packets 0 bytes 0 drop
+		oifname "docker0" counter packets 0 bytes 0 drop
+		counter packets 0 bytes 0 return
+	}
+
+	chain FORWARD {
+		type filter hook forward priority filter; policy drop;
+		counter packets 0 bytes 0 jump DOCKER-USER
+	}
+
+	chain DOCKER-USER {
+		counter packets 0 bytes 0 return
+	}
+}

