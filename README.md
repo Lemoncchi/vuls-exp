@@ -254,7 +254,81 @@ while true; do sleep 1000; done" > /2.sh
 
 ![](.assets_img/README/docker_dmz_ps.png)
 
-## Debug
+### 捕获指定容器的上下行流量
+
+`tmux` 后台挂起 `tcpdump` 抓包：
+
+```bash
+container_name="ebee1d978a00"
+docker run --rm --net=container:${container_name} -v ${PWD}/tcpdump/${container_name}:/tcpdump kaazing/tcpdump
+```
+
+![](.assets_img/README/tmux_container_tcpdump.png)
+
+### 攻破靶标 1
+
+![](.assets_img/README/db_init.png)
+
+#### Metasploit 连接 PostgreSQL 问题
+
+在 `msfdb init` 后，`msfconsole` 无法连接 `PostgreSQL` 数据库，删除 `msf` 数据库（`msfdb delete`）后重新初始化依然报错
+
+尝试手动连接 `postgreSQL` 数据库，并根据错误信息更新 `collection number`
+
+![](.assets_img/README/change_collection_number.png)
+
+但是 `Metasploit` 依旧无法连接 `PostgreSQL` 数据库
+
+找了一个最新的的 `kali prebuilt` 镜像 `kali-linux-2024.2-virtualbox-amd64`，发现其能够正常连接 `PostgreSQL` 数据库
+
+![](.assets_img/README/kali2024_2_postgres.png)
+
+通过检查 `TCP 端口`，发现在之前的 `kali-attacker` 中，`PostgreSQL` 服务启动了两个版本。从 `apt policy` 中也可以看到：
+
+全新安装：
+
+![](.assets_img/README/new_kali_postgres.png)
+
+原 `kali-attacker`：
+
+![](.assets_img/README/old_kali_postgres.png)
+
+故准备删除旧版本的 `PostgreSQL 15`，检查其 `rdepends` 反向依赖：
+
+![](.assets_img/README/postgresql_rdepends.png)
+
+确认删除无影响后，`purge` `PostgreSQL 15`：
+
+![](.assets_img/README/purge_postgresql15.png)
+
+再次尝试 `msfdb init` 发现端口未开放：
+
+![](.assets_img/README/postgres_port_not_open.png)
+
+由于之前同时运行 `postgress 15` 和 `postgress 16`，故 `postgress 16` 的端口号被 `postgress 16` 占用 `5432` 端口后使用 `5433` 端口，故更改 `postgress 16` 的端口号：
+
+![](.assets_img/README/postgresql_check_port.png)
+
+`vim /etc/postgresql/16/main/postgresql.conf` 更改 `port` 为 `5432`：
+
+![](.assets_img/README/postgres16_port.png)
+
+```bash
+systemctl restart postgresql  # 重启服务
+msfdb delete  # 删除原数据库
+msfdb init  # 重新初始化
+msfconsole  # 进入 Metasploit
+```
+
+现在成功连接 `PostgreSQL` 数据库：
+
+![](.assets_img/README/connect_to_postgresql.png)
+
+回想起自己当前使用的虚拟机是一路从 `kali-linux-2023.3-virtualbox-amd64` `滚动更新` 到现在 `2024.2`，一年时间！
+
+~~滚动更新一时爽，版本冲突火葬场~~
+
+<!-- ## Debug
 
 在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
 
@@ -354,3 +428,4 @@ response = requests.get(
 
 - [Configure the daemon to use a proxy](https://docs.docker.com/config/daemon/proxy/)
 - [VirtualBox Network Settings: Complete Guide](https://www.nakivo.com/blog/virtualbox-network-setting-guide/)
+ -->
