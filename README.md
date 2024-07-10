@@ -66,7 +66,7 @@ docker pull vulfocus/vulfocus:latest
 
 `NAT` 模式下，`虚拟机` 被分配到的 IP 地址均为 `10.0.2.15`，其 `网关` 均为 `10.0.2.2`
 
-这完全是一个 `软件定义网络`，而且 `Virtualbox` 在 `NAT` 模式下，除了进行传统的 `NAT` 服务外，还有一个 _便捷功能_ ——将直接访问 `网关 10.0.2.15` 的流量转发到 `宿主机` 的 `localhost回环网卡` 中。
+这完全是一个 `软件定义网络`，而且 `Virtualbox` 在 `NAT` 模式下，除了进行传统的 `NAT` 服务外，还有一个 _便捷功能_ ——将直接访问 `网关 10.0.2.2` 的流量转发到 `宿主机` 的 `localhost回环网卡` 中。
 
 ## 启动 vulfocus 容器
 
@@ -315,11 +315,12 @@ response = requests.get(
 
 至于为什么 `dnslog.cn` 无法进行域名解析，黄老师在上课前恰好已经做了十足的讲解了（但是没有想象到在这个容器中出现）。
 
-不由地猜测此镜像作者预留这行代码的初衷，而且还是使用的 `&&` 而不是 `;` 进行连接——可能是为了在 `dnslog.cn` 统计此镜像的使用情况——但是还有一种情况是——这会暴露此用户的 `公网 IP 地址`——如果此容器：
+不由地猜测此镜像作者预留这行代码的初衷，而且还是使用的 `&&` 而不是 `;` 进行连接——可能是为了在 `dnslog.cn` 统计此镜像的使用情况——但是还有一种情况是——这会暴露此用户的 `DNS 服务器公网 IP 地址`——如果此容器：
 
 1. 运行在一个有 `公网 IP` 的服务器上（没有经过 `NAT` 及防火墙），那么此用户的 `公网 IP` 就会被 `dnslog.cn` 记录下来。且在容器运行过程中，其 `ping` 操作一直都会进行
 2. 容器端口被映射到了公网的网卡上
 3. 容器 [vulshare/nginx-php-flag](https://hub.docker.com/r/vulshare/nginx-php-flag/tags) 的漏洞利用非常简单，而且可以拿到容器的 `root` 权限
+4. 如果该作者可以获取 [dnslog.cn](dnslog.cn) 网站中对于 [aa.25qcpp.dnslog.cn] 的 `ICMP` 日志，那么还可以获取到此容器的 `公网 IP` 地址
 
 攻击者可以据此确定该 `IP` 中正在运行 `靶场容器`——从而对此脆弱容器发起攻击——那么原本的 `靶场容器` 就成 `真肉鸡` 了！
 
@@ -591,7 +592,7 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 
 釜底抽薪，对于门户网站服务器存在的 [CVE-2020-17530](https://nvd.nist.gov/vuln/detail/CVE-2020-17530) 漏洞，`NIST` 对于 `Forced OGNL evaluation` 的修复建议均为更新 `Struts` 到 `2.5.26` 或更高的版本
 
-这里不适用更新 `Struts` 包的方式，而是使用 `热补丁` 的方式进行修复缓解漏洞利用
+这里不使用更新 `Struts` 包的方式，而是使用 `热补丁` 的方式进行修复缓解漏洞利用
 
 ### CVE-2020-17530 的原理
 
@@ -646,7 +647,7 @@ iptables -I INPUT -p tcp -m string --string 'execute.exec' --algo bm  -j DROP
 
 发现在应用规则后，依然无法成功拦截高危负载 `execute.exec` 的 TCP 包
 
-后面才醒悟，虽然 `Docker Proxy` 将 `容器` 的端口 “暴露” 了出来，但是这些 `TCP` 包不是直接 `INPUT` `宿主机` 的，而是会进行 `FORWORD`——软件定义网络（software-defined networking）
+后面才醒悟，虽然 `Docker Proxy` 将 `容器` 的端口 “暴露” 了出来，但是这些 `TCP` 包不是直接 `INPUT` `宿主机` 的，而是会经过 `FORWORD` 到 `docker` 容器中——所谓软件定义网络 `software-defined networking`
 
 从下面的实验中可以看出 `iptables` 规则应用在 `Filter` 表的 `INPUT` 链上的效果：
 
