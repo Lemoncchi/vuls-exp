@@ -467,7 +467,7 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 
 ![](.assets_img/README/get_flag.png)
 
-<!-- ## Debug
+## Debug
 
 在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
 
@@ -567,4 +567,3 @@ response = requests.get(
 
 - [Configure the daemon to use a proxy](https://docs.docker.com/config/daemon/proxy/)
 - [VirtualBox Network Settings: Complete Guide](https://www.nakivo.com/blog/virtualbox-network-setting-guide/)
- -->
