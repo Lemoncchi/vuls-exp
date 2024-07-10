@@ -187,7 +187,7 @@ print(response.text)
 
 ![](.assets_img/README/dmz_map.png)
 
-导出 [DMZ_topology.zip](./DMZ_topology.zip) 当前（2024 年 7 月）可用
+导出 [DMZ_topology.zip](./resources/DMZ_topology.zip) 当前（2024 年 7 月）可用
 
 ### 启动 DMZ 靶场
 
@@ -466,6 +466,14 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 ```
 
 ![](.assets_img/README/get_flag.png)
+
+## 入侵取证
+
+`tcpdump` 抓包结果：[tcpdump.pcap](./resources/tcpdump.pcap)
+
+```bash
+sudo apt install suricata
+```
 
 ## Debug
 
