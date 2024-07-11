@@ -649,6 +649,22 @@ iptables -I INPUT -p tcp -m string --string 'execute.exec' --algo bm  -j DROP
 
 后面才醒悟，虽然 `Docker Proxy` 将 `容器` 的端口 “暴露” 了出来，但是这些 `TCP` 包不是直接 `INPUT` `宿主机` 的，而是会经过 `FORWORD` 到 `docker` 容器中——所谓软件定义网络 `software-defined networking`
 
+| Tables/Chains | PREROUTING | INPUT | FORWARD | OUTPUT | POSTROUTING |
+| :-----------: | :--------: | :---: | :-----: | :----: | :---------: |
+|  (路由判断)   |            |       |         |   Y    |             |
+|      raw      |     Y      |       |         |   Y    |             |
+|  (连接跟踪)   |     Y      |       |         |   Y    |             |
+|    mangle     |     Y      |   Y   |    Y    |   Y    |      Y      |
+|  nat (DNAT)   |     Y      |       |         |   Y    |             |
+|  (路由判断)   |     Y      |       |         |   Y    |             |
+|    filter     |            |   Y   |    Y    |   Y    |             |
+|   security    |            |   Y   |    Y    |   Y    |             |
+|  nat (SNAT)   |            |   Y   |         |   Y    |      Y      |
+
+- 收到的、目的是本机的包：`PRETOUTING` -> `INPUT`
+- 收到的、目的是其他主机的包：`PRETOUTING` -> `FORWARD` -> `POSTROUTING`
+- 本地产生的包：`OUTPUT` -> `POSTROUTING`
+
 从下面的实验中可以看出 `iptables` 规则应用在 `Filter` 表的 `INPUT` 链上的效果：
 
 [![asciicast](https://asciinema.org/a/667506.svg)](https://asciinema.org/a/667506)
@@ -670,3 +686,4 @@ iptables -D DOCKER-USER -p tcp -m string --string 'execute.exec' --algo bm  -j D
 - [Configure the daemon to use a proxy](https://docs.docker.com/config/daemon/proxy/)
 - [VirtualBox Network Settings: Complete Guide](https://www.nakivo.com/blog/virtualbox-network-setting-guide/)
 - [Docker - Packet filtering and firewalls](https://docs.docker.com/network/packet-filtering-firewalls/)
+- [深入理解 iptables 和 netfilter 架构](https://arthurchiao.art/blog/deep-dive-into-iptables-and-netfilter-arch-zh/)
