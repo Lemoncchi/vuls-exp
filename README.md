@@ -626,7 +626,7 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 
 `execute.exec` 是非常明显的 `命令执行` 恶意代码
 
-~~高端的食材往往采用最朴素的烹饪方式~~，直接上 `iptables`！
+最开始想使用类似于 `WAF` 的 `反向代理` 进行 `payload` 的检测。但是由于当前是使用 `HTTP` 协议进行 **明文通信**，故这里直接使用 `iptables` 进行 `恶意负载` 的检测与拦截
 
 ```bash
 echo '未添加任何 iptables 规则前'
