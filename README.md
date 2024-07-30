@@ -683,6 +683,17 @@ iptables -I INPUT -p tcp -m string --string 'execute.exec' --algo bm  -j DROP
 iptables -D DOCKER-USER -p tcp -m string --string 'execute.exec' --algo bm  -j DROP
 ```
 
+## 个人实践心得体会
+
+> 一些自认为有技术含量的工作
+
+1. `Virtual Box` 在 `NAT` 模式下，通过访问 `10.0.2.2` 的 `网关` 访问宿主机 `localhost` 网卡的特性的活用
+2. 在 `log4j2 漏洞` 利用失败后，通过 `Wireshark` 在 `传输层面的负载` 并结合 `日志` 逐步排查 `log4j2 漏洞` 利用过程，最后反推出是 `url 编解码` 导致的漏洞利用失败
+3. 逐步排查 `靶场` 启动失败的原因，并通过 `Dockerfile` 重新构建镜像并成功启动
+4. 通过对比纯净安装的 `Kali` 虚拟机与问题虚拟机的环境，解决了由于 `Kali` `滚动更新` 导致多版本 `PostgreSQL` 同时共存导致的 `Metasploit` 无法连接 `PostgreSQL` 数据库的问题
+5. 活用 `Metasploit` 的 `autoroute` 模块进行灵活路由
+6. 对于 `iptables` 的调试，理解 `docker` 网络在 `宿主机` 中的路由
+
 ## 参考
 
 - [Configure the daemon to use a proxy](https://docs.docker.com/config/daemon/proxy/)
